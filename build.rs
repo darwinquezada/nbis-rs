@@ -54,24 +54,23 @@ fn build_nfiq2() -> PathBuf {
         .define("BUILD_NFIQ2_CLI", "OFF");
 
     if is_wasm {
+        // These are the "proper" ways to tell OpenCV to stop
         cmake
-            // 1. Kill the dynamic CPU dispatching entirely (This stops .dispatch.cpp files!)
-            .define("CPU_DISPATCH", "") 
-            // 2. Tell OpenCV it's only allowed to compile for WebAssembly 
-            .define("CPU_BASELINE", "WASM") 
-            // 3. Force off the intrinsics and x86 features
+            .define("CPU_BASELINE", "NONE")
+            .define("CPU_DISPATCH", "NONE")
             .define("CV_ENABLE_INTRINSICS", "OFF")
-            .define("ENABLE_SSE", "OFF")
-            .define("ENABLE_SSE2", "OFF")
-            .define("ENABLE_SSE3", "OFF")
-            .define("ENABLE_SSSE3", "OFF")
-            .define("ENABLE_SSE41", "OFF")
-            .define("ENABLE_SSE42", "OFF")
-            .define("ENABLE_AVX", "OFF")
-            .define("ENABLE_AVX2", "OFF")
-            // 4. Disable tests/perf tests just in case they have hardcoded intrinsics
-            .define("BUILD_TESTS", "OFF")
-            .define("BUILD_PERF_TESTS", "OFF");
+            // This is a special flag used by OpenCV's official Wasm toolchain
+            .define("OPENCV_FOR_WASM", "ON")
+            // Force disable some problematic modules that often pull in x86 headers
+            .define("WITH_ITT", "OFF")
+            .define("WITH_TIFF", "OFF")
+            .define("WITH_OPENCL", "OFF");
+
+        // THE SECRET SAUCE: Inject macros directly into the compiler 
+        // to pretend optimizations are already disabled/unsupported.
+        cmake.cxxflag("-Dcv_cpu_dispatch_h=1"); // Fake the dispatch header guard
+        cmake.cxxflag("-DCV_DISABLE_OPTIMIZATION=1");
+        cmake.cxxflag("-DCPU_BASELINE_NONE=1");
     }
 
     if is_android {
