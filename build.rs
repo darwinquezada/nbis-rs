@@ -75,24 +75,28 @@ fn build_nfiq2() -> PathBuf {
         .define("BUILD_NFIQ2_CLI", "OFF");
 
     if is_wasm {
-        // Find the EMSDK path from environment, or default to your path
         let emsdk = env::var("EMSDK").unwrap_or_else(|_| "/tmp/emsdk".to_string());
         let toolchain_path = format!("{}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake", emsdk);
 
         cmake
-            // Force the toolchain file path
             .define("CMAKE_TOOLCHAIN_FILE", &toolchain_path)
-            // Manually specify the compilers to avoid them defaulting to /usr/bin/gcc
+            // 1. MANUALLY SET BITNESS (The fix for your specific error)
+            .define("CMAKE_SIZEOF_VOID_P", "4")
+            // 2. FORCE THE COMPILERS (Stop it from using /usr/bin/gcc)
             .define("CMAKE_C_COMPILER", "emcc")
             .define("CMAKE_CXX_COMPILER", "em++")
-            // Re-add our SIMD fixes
+            // 3. SKIP COMPILER TESTS (Speeds up build and avoids "bitness" failure)
+            .define("CMAKE_TRY_COMPILE_TARGET_TYPE", "STATIC_LIBRARY")
+            // 4. PREVENT OPENCV OPTIMIZATION CHECKS
             .define("CPU_BASELINE", "DETECT")
             .define("CPU_DISPATCH", "")
             .define("CV_ENABLE_INTRINSICS", "OFF")
-            .define("WITH_CUDA", "OFF");
+            // 5. PASS TO NESTED BUILD
+            .define("CMAKE_ARGS", "-DCPU_BASELINE=DETECT -DCPU_DISPATCH= -DCV_ENABLE_INTRINSICS=OFF -DOPENCV_FOR_WASM=ON");
 
-        // The Hijack from the previous step (Keep these!)
+        // Keep the Hijacks to block the broken x86 headers
         cmake.cxxflag("-DOPENCV_HAL_INTRIN_SSE_HPP=1");
+        cmake.cxxflag("-DOPENCV_HAL_INTRIN_AVX_HPP=1");
         cmake.cxxflag("-D_mm256_zeroupper()=");
     }
 
