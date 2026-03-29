@@ -55,6 +55,11 @@ fn build_nfiq2() -> PathBuf {
 
     if is_wasm {
         cmake
+            // 1. Kill the dynamic CPU dispatching entirely (This stops .dispatch.cpp files!)
+            .define("CPU_DISPATCH", "") 
+            // 2. Tell OpenCV it's only allowed to compile for WebAssembly 
+            .define("CPU_BASELINE", "WASM") 
+            // 3. Force off the intrinsics and x86 features
             .define("CV_ENABLE_INTRINSICS", "OFF")
             .define("ENABLE_SSE", "OFF")
             .define("ENABLE_SSE2", "OFF")
@@ -64,7 +69,9 @@ fn build_nfiq2() -> PathBuf {
             .define("ENABLE_SSE42", "OFF")
             .define("ENABLE_AVX", "OFF")
             .define("ENABLE_AVX2", "OFF")
-            .define("ENABLE_WASM_SIMD", "ON");
+            // 4. Disable tests/perf tests just in case they have hardcoded intrinsics
+            .define("BUILD_TESTS", "OFF")
+            .define("BUILD_PERF_TESTS", "OFF");
     }
 
     if is_android {
