@@ -39,11 +39,12 @@ fn build_nfiq2() -> PathBuf {
     let target = env::var("TARGET").unwrap_or_default();
     let is_android = target.contains("android");
     let is_linux = target.contains("linux") && !target.contains("android");
-    //let is_windows = target.contains("windows");
     let is_macos = target.contains("apple") || target.contains("darwin");
+    
+    let is_wasm = target.contains("wasm32"); 
+
     copy_nfiq2_dirs();
 
-    // ---- CMake for NFIQ2 ----
     let mut cmake = cmake::Config::new("ext/NFIQ2-2.3.0");
     cmake
         .define("CMAKE_BUILD_TYPE", "Release")
@@ -51,6 +52,20 @@ fn build_nfiq2() -> PathBuf {
         .define("EMBED_RANDOM_FOREST_PARAMETERS", "ON")
         .define("EMBEDDED_RANDOM_FOREST_PARAMETER_FCT", "3")
         .define("BUILD_NFIQ2_CLI", "OFF");
+
+    if is_wasm {
+        cmake
+            .define("CV_ENABLE_INTRINSICS", "OFF")
+            .define("ENABLE_SSE", "OFF")
+            .define("ENABLE_SSE2", "OFF")
+            .define("ENABLE_SSE3", "OFF")
+            .define("ENABLE_SSSE3", "OFF")
+            .define("ENABLE_SSE41", "OFF")
+            .define("ENABLE_SSE42", "OFF")
+            .define("ENABLE_AVX", "OFF")
+            .define("ENABLE_AVX2", "OFF")
+            .define("ENABLE_WASM_SIMD", "ON");
+    }
 
     if is_android {
         let ndk = env::var("ANDROID_NDK_ROOT").expect("ANDROID_NDK_ROOT not set");
@@ -65,11 +80,9 @@ fn build_nfiq2() -> PathBuf {
 
     let dst = cmake.build();
 
-    // Define the include and library paths for NFIQ2
     let nfiq2_include_path = dst.join("build/install_staging/nfiq2/include");
     let nfiq2_lib_path = dst.join("build/install_staging/nfiq2/lib");
 
-    // On Android, OpenCV libraries are in a different location
     let opencv_android_lib_path = if is_android {
         let abi = android_abi_from_target(&target).expect("Unsupported Android ABI");
         Some(dst.join(format!(
