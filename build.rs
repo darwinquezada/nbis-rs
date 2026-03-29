@@ -75,27 +75,25 @@ fn build_nfiq2() -> PathBuf {
         .define("BUILD_NFIQ2_CLI", "OFF");
 
     if is_wasm {
-        // 1. The Header Guard Hijack
-        // We define the internal "Include Guards" of OpenCV's SSE/AVX headers.
-        // This makes the compiler think these files are already loaded and empty.
-        cmake.cxxflag("-DOPENCV_HAL_INTRIN_SSE_HPP=1");
-        cmake.cxxflag("-DOPENCV_HAL_INTRIN_AVX_HPP=1");
-        cmake.cxxflag("-DOPENCV_HAL_INTRIN_AVX2_HPP=1");
-        
-        // 2. The "Macro Hack" (Safety fallback)
-        cmake.cxxflag("-D_mm256_zeroupper()=");
-        
-        // 3. Force-feed settings to the nested NFIQ2 -> OpenCV build
-        // We MUST turn off CUDA, OpenCL, and Dispatching here.
-        cmake.define("CMAKE_ARGS", "-DCPU_BASELINE=DETECT -DCPU_DISPATCH= -DCV_ENABLE_INTRINSICS=OFF -DWITH_CUDA=OFF -DWITH_OPENCL=OFF -DWITH_IPP=OFF");
+        // Find the EMSDK path from environment, or default to your path
+        let emsdk = env::var("EMSDK").unwrap_or_else(|_| "/tmp/emsdk".to_string());
+        let toolchain_path = format!("{}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake", emsdk);
 
-        // 4. Standard Wasm flags
         cmake
+            // Force the toolchain file path
+            .define("CMAKE_TOOLCHAIN_FILE", &toolchain_path)
+            // Manually specify the compilers to avoid them defaulting to /usr/bin/gcc
+            .define("CMAKE_C_COMPILER", "emcc")
+            .define("CMAKE_CXX_COMPILER", "em++")
+            // Re-add our SIMD fixes
             .define("CPU_BASELINE", "DETECT")
             .define("CPU_DISPATCH", "")
             .define("CV_ENABLE_INTRINSICS", "OFF")
-            .define("WITH_CUDA", "OFF")
-            .define("WITH_OPENCL", "OFF");
+            .define("WITH_CUDA", "OFF");
+
+        // The Hijack from the previous step (Keep these!)
+        cmake.cxxflag("-DOPENCV_HAL_INTRIN_SSE_HPP=1");
+        cmake.cxxflag("-D_mm256_zeroupper()=");
     }
 
     if is_android {
