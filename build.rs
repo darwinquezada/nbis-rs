@@ -78,25 +78,31 @@ fn build_nfiq2() -> PathBuf {
         let emsdk = env::var("EMSDK").unwrap_or_else(|_| "/tmp/emsdk".to_string());
         let toolchain_path = format!("{}/upstream/emscripten/cmake/Modules/Platform/Emscripten.cmake", emsdk);
 
+        // We use CMAKE_ARGS because NFIQ2's CMakeLists.txt likely uses it 
+        // to forward flags to the ExternalProject_Add(OpenCV) call.
+        let nested_flags = [
+            "-DCMAKE_TOOLCHAIN_FILE=", &toolchain_path,
+            " -DCMAKE_SIZEOF_VOID_P=4",
+            " -DOPENCV_FOR_WASM=ON",
+            " -DCPU_BASELINE=DETECT",
+            " -DCPU_DISPATCH=",
+            " -DCV_ENABLE_INTRINSICS=OFF",
+            " -DWITH_1394=OFF",
+            " -DWITH_CUDA=OFF",
+            " -DWITH_VTK=OFF"
+        ].concat();
+
         cmake
             .define("CMAKE_TOOLCHAIN_FILE", &toolchain_path)
-            // 1. MANUALLY SET BITNESS (The fix for your specific error)
             .define("CMAKE_SIZEOF_VOID_P", "4")
-            // 2. FORCE THE COMPILERS (Stop it from using /usr/bin/gcc)
-            .define("CMAKE_C_COMPILER", "emcc")
-            .define("CMAKE_CXX_COMPILER", "em++")
-            // 3. SKIP COMPILER TESTS (Speeds up build and avoids "bitness" failure)
-            .define("CMAKE_TRY_COMPILE_TARGET_TYPE", "STATIC_LIBRARY")
-            // 4. PREVENT OPENCV OPTIMIZATION CHECKS
-            .define("CPU_BASELINE", "DETECT")
-            .define("CPU_DISPATCH", "")
-            .define("CV_ENABLE_INTRINSICS", "OFF")
-            // 5. PASS TO NESTED BUILD
-            .define("CMAKE_ARGS", "-DCPU_BASELINE=DETECT -DCPU_DISPATCH= -DCV_ENABLE_INTRINSICS=OFF -DOPENCV_FOR_WASM=ON");
+            // Pass the flags to the sub-project
+            .define("CMAKE_ARGS", &nested_flags)
+            // Some versions of NFIQ2 use these variables instead:
+            .define("OPENCV_CMAKE_ARGS", &nested_flags)
+            .define("EXTRA_CMAKE_ARGS", &nested_flags);
 
-        // Keep the Hijacks to block the broken x86 headers
+        // The Hijack to block the broken x86 headers
         cmake.cxxflag("-DOPENCV_HAL_INTRIN_SSE_HPP=1");
-        cmake.cxxflag("-DOPENCV_HAL_INTRIN_AVX_HPP=1");
         cmake.cxxflag("-D_mm256_zeroupper()=");
     }
 
