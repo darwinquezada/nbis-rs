@@ -75,23 +75,37 @@ fn build_nfiq2() -> PathBuf {
         .define("BUILD_NFIQ2_CLI", "OFF");
 
     if is_wasm {
-        // These are the "proper" ways to tell OpenCV to stop
         cmake
-            .define("CPU_BASELINE", "NONE")
-            .define("CPU_DISPATCH", "NONE")
+            // Use the standard OpenCV-Wasm configuration
+            .define("CPU_BASELINE", "DETECT") 
+            .define("CPU_DISPATCH", "")
             .define("CV_ENABLE_INTRINSICS", "OFF")
-            // This is a special flag used by OpenCV's official Wasm toolchain
-            .define("OPENCV_FOR_WASM", "ON")
-            // Force disable some problematic modules that often pull in x86 headers
-            .define("WITH_ITT", "OFF")
-            .define("WITH_TIFF", "OFF")
-            .define("WITH_OPENCL", "OFF");
+            .define("ENABLE_SSE", "OFF")
+            .define("ENABLE_SSE2", "OFF")
+            .define("ENABLE_SSE3", "OFF")
+            .define("ENABLE_SSSE3", "OFF")
+            .define("ENABLE_SSE41", "OFF")
+            .define("ENABLE_SSE42", "OFF")
+            .define("ENABLE_AVX", "OFF")
+            .define("ENABLE_AVX2", "OFF")
+            .define("WITH_PTHREADS_PF", "OFF")
+            .define("CV_TRACE", "OFF");
 
-        // THE SECRET SAUCE: Inject macros directly into the compiler 
-        // to pretend optimizations are already disabled/unsupported.
-        cmake.cxxflag("-Dcv_cpu_dispatch_h=1"); // Fake the dispatch header guard
-        cmake.cxxflag("-DCV_DISABLE_OPTIMIZATION=1");
-        cmake.cxxflag("-DCPU_BASELINE_NONE=1");
+        // Use cxxflag to pass the "Macro Hack" safely. 
+        // We define the problematic functions to expand to nothing.
+        // We also define __SSE__ macros to 0 to prevent headers from activating.
+        cmake.cxxflag("-D_mm256_zeroupper()=");
+        cmake.cxxflag("-D_mm_setr_pi32(a,b)=_mm_set_epi32(0,0,b,a)");
+        cmake.cxxflag("-D_mm_setr_epi64(a,b)=_mm_set_epi64(b,a)");
+        
+        // Force the preprocessor to ignore x86 paths
+        cmake.cxxflag("-U__SSE__");
+        cmake.cxxflag("-U__SSE2__");
+        cmake.cxxflag("-U__SSE3__");
+        cmake.cxxflag("-U__SSSE3__");
+        cmake.cxxflag("-U__SSE4_1__");
+        cmake.cxxflag("-U__SSE4_2__");
+        cmake.cxxflag("-U__AVX__");
     }
 
     if is_android {
