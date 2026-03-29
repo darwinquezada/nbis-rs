@@ -33,6 +33,27 @@ fn copy_nfiq2_dirs() {
     let source = Path::new("ext/libbiomeval-10.0");
     let dst = Path::new("ext/NFIQ2-2.3.0/libbiomeval");
     copy_dir_recursive(source, dst).expect("failed to copy libbiomeval-10.0 dir");
+
+    let target = env::var("TARGET").unwrap_or_default();
+    if target.contains("wasm32") {
+        println!("cargo:warning=Patching OpenCV headers for WebAssembly...");
+
+        let dispatch_h = dst.join("modules/core/include/opencv2/core/cv_cpu_dispatch.h");
+        if let Ok(content) = fs::read_to_string(&dispatch_h) {
+            let patched = content.replace("_mm256_zeroupper()", "/* _mm256_zeroupper() */");
+            fs::write(&dispatch_h, patched).expect("Failed to patch cv_cpu_dispatch.h");
+        }
+
+        let intrin_sse = dst.join("modules/core/include/opencv2/core/hal/intrin_sse.hpp");
+        if let Ok(content) = fs::read_to_string(&intrin_sse) {
+            let mut patched = String::from("#if !defined(__EMSCRIPTEN__)\n");
+            patched.push_str(&content);
+            patched.push_str("\n#endif // !__EMSCRIPTEN__\n");
+            fs::write(&intrin_sse, patched).expect("Failed to patch intrin_sse.hpp");
+        }
+        
+        println!("cargo:warning=OpenCV headers successfully lobotomized for Wasm.");
+    }
 }
 
 fn build_nfiq2() -> PathBuf {
