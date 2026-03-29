@@ -75,37 +75,27 @@ fn build_nfiq2() -> PathBuf {
         .define("BUILD_NFIQ2_CLI", "OFF");
 
     if is_wasm {
+        // 1. The Header Guard Hijack
+        // We define the internal "Include Guards" of OpenCV's SSE/AVX headers.
+        // This makes the compiler think these files are already loaded and empty.
+        cmake.cxxflag("-DOPENCV_HAL_INTRIN_SSE_HPP=1");
+        cmake.cxxflag("-DOPENCV_HAL_INTRIN_AVX_HPP=1");
+        cmake.cxxflag("-DOPENCV_HAL_INTRIN_AVX2_HPP=1");
+        
+        // 2. The "Macro Hack" (Safety fallback)
+        cmake.cxxflag("-D_mm256_zeroupper()=");
+        
+        // 3. Force-feed settings to the nested NFIQ2 -> OpenCV build
+        // We MUST turn off CUDA, OpenCL, and Dispatching here.
+        cmake.define("CMAKE_ARGS", "-DCPU_BASELINE=DETECT -DCPU_DISPATCH= -DCV_ENABLE_INTRINSICS=OFF -DWITH_CUDA=OFF -DWITH_OPENCL=OFF -DWITH_IPP=OFF");
+
+        // 4. Standard Wasm flags
         cmake
-            // Use the standard OpenCV-Wasm configuration
-            .define("CPU_BASELINE", "DETECT") 
+            .define("CPU_BASELINE", "DETECT")
             .define("CPU_DISPATCH", "")
             .define("CV_ENABLE_INTRINSICS", "OFF")
-            .define("ENABLE_SSE", "OFF")
-            .define("ENABLE_SSE2", "OFF")
-            .define("ENABLE_SSE3", "OFF")
-            .define("ENABLE_SSSE3", "OFF")
-            .define("ENABLE_SSE41", "OFF")
-            .define("ENABLE_SSE42", "OFF")
-            .define("ENABLE_AVX", "OFF")
-            .define("ENABLE_AVX2", "OFF")
-            .define("WITH_PTHREADS_PF", "OFF")
-            .define("CV_TRACE", "OFF");
-
-        // Use cxxflag to pass the "Macro Hack" safely. 
-        // We define the problematic functions to expand to nothing.
-        // We also define __SSE__ macros to 0 to prevent headers from activating.
-        cmake.cxxflag("-D_mm256_zeroupper()=");
-        cmake.cxxflag("-D_mm_setr_pi32(a,b)=_mm_set_epi32(0,0,b,a)");
-        cmake.cxxflag("-D_mm_setr_epi64(a,b)=_mm_set_epi64(b,a)");
-        
-        // Force the preprocessor to ignore x86 paths
-        cmake.cxxflag("-U__SSE__");
-        cmake.cxxflag("-U__SSE2__");
-        cmake.cxxflag("-U__SSE3__");
-        cmake.cxxflag("-U__SSSE3__");
-        cmake.cxxflag("-U__SSE4_1__");
-        cmake.cxxflag("-U__SSE4_2__");
-        cmake.cxxflag("-U__AVX__");
+            .define("WITH_CUDA", "OFF")
+            .define("WITH_OPENCL", "OFF");
     }
 
     if is_android {
